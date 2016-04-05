@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2015 the original author or authors.
+ * Copyright 2012-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,6 +47,7 @@ import org.springframework.context.ApplicationListener;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.ConfigurationClassPostProcessor;
 import org.springframework.core.Ordered;
+import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.core.convert.support.DefaultConversionService;
 import org.springframework.core.env.ConfigurableEnvironment;
@@ -130,6 +131,11 @@ public class ConfigFileApplicationListener implements EnvironmentPostProcessor,
 	 */
 	public static final int DEFAULT_ORDER = Ordered.HIGHEST_PRECEDENCE + 10;
 
+	/**
+	 * Name of the application configuration {@link PropertySource}.
+	 */
+	public static final String APPLICATION_CONFIGURATION_PROPERTY_SOURCE_NAME = "applicationConfigurationProperties";
+
 	private final DeferredLog logger = new DeferredLog();
 
 	private String searchLocations;
@@ -153,14 +159,18 @@ public class ConfigFileApplicationListener implements EnvironmentPostProcessor,
 
 	private void onApplicationEnvironmentPreparedEvent(
 			ApplicationEnvironmentPreparedEvent event) {
-		List<EnvironmentPostProcessor> postProcessors = SpringFactoriesLoader
-				.loadFactories(EnvironmentPostProcessor.class,
-						getClass().getClassLoader());
+		List<EnvironmentPostProcessor> postProcessors = loadPostProcessors();
 		postProcessors.add(this);
+		AnnotationAwareOrderComparator.sort(postProcessors);
 		for (EnvironmentPostProcessor postProcessor : postProcessors) {
 			postProcessor.postProcessEnvironment(event.getEnvironment(),
 					event.getSpringApplication());
 		}
+	}
+
+	List<EnvironmentPostProcessor> loadPostProcessors() {
+		return SpringFactoriesLoader.loadFactories(EnvironmentPostProcessor.class,
+				getClass().getClassLoader());
 	}
 
 	@Override
@@ -420,7 +430,7 @@ public class ConfigFileApplicationListener implements EnvironmentPostProcessor,
 				// Search for a file with the given name
 				for (String ext : this.propertiesLoader.getAllFileExtensions()) {
 					if (profile != null) {
-						// Try the profile specific file
+						// Try the profile-specific file
 						loadIntoGroup(group, location + name + "-" + profile + "." + ext,
 								null);
 						for (String processedProfile : this.processedProfiles) {
@@ -435,7 +445,7 @@ public class ConfigFileApplicationListener implements EnvironmentPostProcessor,
 						loadIntoGroup(group, location + name + "-" + profile + "." + ext,
 								profile);
 					}
-					// Also try the profile specific section (if any) of the normal file
+					// Also try the profile-specific section (if any) of the normal file
 					loadIntoGroup(group, location + name + "." + ext, profile);
 				}
 			}
@@ -463,7 +473,7 @@ public class ConfigFileApplicationListener implements EnvironmentPostProcessor,
 				msg.append("Skipped ");
 			}
 			msg.append("config file ");
-			msg.append("'").append(location).append("'");
+			msg.append(getResourceDescription(location, resource));
 			if (StringUtils.hasLength(profile)) {
 				msg.append(" for profile ").append(profile);
 			}
@@ -475,6 +485,20 @@ public class ConfigFileApplicationListener implements EnvironmentPostProcessor,
 				this.logger.debug(msg);
 			}
 			return propertySource;
+		}
+
+		private String getResourceDescription(String location, Resource resource) {
+			String resourceDescription = "'" + location + "'";
+			if (resource != null) {
+				try {
+					resourceDescription = String.format("'%s' (%s)",
+							resource.getURI().toASCIIString(), location);
+				}
+				catch (IOException ex) {
+					// Use the location as the description
+				}
+			}
+			return resourceDescription;
 		}
 
 		private void handleProfileProperties(PropertySource<?> propertySource) {
@@ -494,7 +518,7 @@ public class ConfigFileApplicationListener implements EnvironmentPostProcessor,
 				}
 				return;
 			}
-			if (profiles.size() > 0) {
+			if (!profiles.isEmpty()) {
 				addProfiles(profiles);
 				this.logger.debug("Activated profiles "
 						+ StringUtils.collectionToCommaDelimitedString(profiles));
@@ -594,14 +618,12 @@ public class ConfigFileApplicationListener implements EnvironmentPostProcessor,
 	static class ConfigurationPropertySources
 			extends EnumerablePropertySource<Collection<PropertySource<?>>> {
 
-		private static final String NAME = "applicationConfigurationProperties";
-
 		private final Collection<PropertySource<?>> sources;
 
 		private final String[] names;
 
 		ConfigurationPropertySources(Collection<PropertySource<?>> sources) {
-			super(NAME, sources);
+			super(APPLICATION_CONFIGURATION_PROPERTY_SOURCE_NAME, sources);
 			this.sources = sources;
 			List<String> names = new ArrayList<String>();
 			for (PropertySource<?> source : sources) {
@@ -625,9 +647,9 @@ public class ConfigFileApplicationListener implements EnvironmentPostProcessor,
 		}
 
 		public static void finishAndRelocate(MutablePropertySources propertySources) {
+			String name = APPLICATION_CONFIGURATION_PROPERTY_SOURCE_NAME;
 			ConfigurationPropertySources removed = (ConfigurationPropertySources) propertySources
-					.get(ConfigurationPropertySources.NAME);
-			String name = ConfigurationPropertySources.NAME;
+					.get(name);
 			if (removed != null) {
 				for (PropertySource<?> propertySource : removed.sources) {
 					if (propertySource instanceof EnumerableCompositePropertySource) {
@@ -641,7 +663,7 @@ public class ConfigFileApplicationListener implements EnvironmentPostProcessor,
 						propertySources.addAfter(name, propertySource);
 					}
 				}
-				propertySources.remove(ConfigurationPropertySources.NAME);
+				propertySources.remove(APPLICATION_CONFIGURATION_PROPERTY_SOURCE_NAME);
 			}
 		}
 

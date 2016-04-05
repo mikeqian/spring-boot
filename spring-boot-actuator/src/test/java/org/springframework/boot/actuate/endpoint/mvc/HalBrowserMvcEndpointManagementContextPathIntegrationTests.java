@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2015 the original author or authors.
+ * Copyright 2012-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,14 +22,12 @@ import org.junit.runner.RunWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.actuate.autoconfigure.MinimalActuatorHypermediaApplication;
-import org.springframework.boot.actuate.endpoint.mvc.HalBrowserMvcEndpointManagementContextPathIntegrationTests.SpringBootHypermediaApplication;
-import org.springframework.boot.test.SpringApplicationConfiguration;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.hateoas.ResourceSupport;
 import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
-import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
-import org.springframework.test.context.web.WebAppConfiguration;
+import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -43,15 +41,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Integration tests for {@link HalBrowserMvcEndpoint} when a custom management
- * context path has been configured.
+ * Integration tests for {@link HalBrowserMvcEndpoint} when a custom management context
+ * path has been configured.
  *
  * @author Dave Syer
  * @author Andy Wilkinson
  */
-@RunWith(SpringJUnit4ClassRunner.class)
-@SpringApplicationConfiguration(SpringBootHypermediaApplication.class)
-@WebAppConfiguration
+@RunWith(SpringRunner.class)
+@SpringBootTest
 @TestPropertySource(properties = "management.contextPath:/admin")
 @DirtiesContext
 public class HalBrowserMvcEndpointManagementContextPathIntegrationTests {
@@ -76,6 +73,12 @@ public class HalBrowserMvcEndpointManagementContextPathIntegrationTests {
 	}
 
 	@Test
+	public void actuatorHomeWithTrailingSlashJson() throws Exception {
+		this.mockMvc.perform(get("/admin/").accept(MediaType.APPLICATION_JSON))
+				.andExpect(status().isOk()).andExpect(jsonPath("$._links").exists());
+	}
+
+	@Test
 	public void actuatorHomeHtml() throws Exception {
 		this.mockMvc.perform(get("/admin/").accept(MediaType.TEXT_HTML))
 				.andExpect(status().isOk())
@@ -85,10 +88,8 @@ public class HalBrowserMvcEndpointManagementContextPathIntegrationTests {
 	@Test
 	public void trace() throws Exception {
 		this.mockMvc.perform(get("/admin/trace").accept(MediaType.APPLICATION_JSON))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$._links.self.href")
-						.value("http://localhost/admin/trace"))
-				.andExpect(jsonPath("$.content").isArray());
+				.andExpect(status().isOk()).andExpect(jsonPath("$._links").doesNotExist())
+				.andExpect(jsonPath("$").isArray());
 	}
 
 	@Test

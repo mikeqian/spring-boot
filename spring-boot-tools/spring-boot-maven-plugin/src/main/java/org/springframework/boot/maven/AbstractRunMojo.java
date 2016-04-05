@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2015 the original author or authors.
+ * Copyright 2012-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,9 +64,9 @@ public abstract class AbstractRunMojo extends AbstractDependencyFilterMojo {
 	/**
 	 * Add maven resources to the classpath directly, this allows live in-place editing of
 	 * resources. Duplicate resources are removed from {@code target/classes} to prevent
-	 * them to appear twice if {@code ClassLoader.getResources()} is called. Please consider
-	 * adding {@code spring-boot-devtools} to your project instead as it provides this feature
-	 * and many more.
+	 * them to appear twice if {@code ClassLoader.getResources()} is called. Please
+	 * consider adding {@code spring-boot-devtools} to your project instead as it provides
+	 * this feature and many more.
 	 * @since 1.0
 	 */
 	@Parameter(property = "run.addResources", defaultValue = "false")
@@ -152,6 +152,13 @@ public abstract class AbstractRunMojo extends AbstractDependencyFilterMojo {
 	private Boolean useTestClasspath;
 
 	/**
+	 * Skip the execution.
+	 * @since 1.3.2
+	 */
+	@Parameter(defaultValue = "false")
+	private boolean skip;
+
+	/**
 	 * Specify if the application process should be forked.
 	 * @return {@code true} if the application process should be forked
 	 */
@@ -170,6 +177,10 @@ public abstract class AbstractRunMojo extends AbstractDependencyFilterMojo {
 
 	@Override
 	public void execute() throws MojoExecutionException, MojoFailureException {
+		if (this.skip) {
+			getLog().debug("skipping run as per configuration.");
+			return;
+		}
 		final String startClassName = getStartClass();
 		run(startClassName);
 	}

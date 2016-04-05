@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2015 the original author or authors.
+ * Copyright 2012-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ public class LogFileMvcEndpoint implements MvcEndpoint, EnvironmentAware {
 	 * Endpoint URL path.
 	 */
 	@NotNull
-	@Pattern(regexp = "/[^/]*", message = "Path must start with /")
+	@Pattern(regexp = "/.*", message = "Path must start with /")
 	private String path = "/logfile";
 
 	/**
@@ -130,7 +130,7 @@ public class LogFileMvcEndpoint implements MvcEndpoint, EnvironmentAware {
 		}
 		FileSystemResource resource = new FileSystemResource(logFile.toString());
 		if (!resource.exists()) {
-			if (logger.isWarnEnabled()) {
+			if (logger.isDebugEnabled()) {
 				logger.debug("Log file '" + resource + "' does not exist");
 			}
 			return null;
@@ -147,6 +147,12 @@ public class LogFileMvcEndpoint implements MvcEndpoint, EnvironmentAware {
 
 		Handler(Resource resource) {
 			this.resource = resource;
+			try {
+				afterPropertiesSet();
+			}
+			catch (Exception ex) {
+				throw new IllegalStateException(ex);
+			}
 		}
 
 		@Override

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2015 the original author or authors.
+ * Copyright 2012-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ public class HalJsonMvcEndpoint extends WebMvcConfigurerAdapter
 	 * Endpoint URL path.
 	 */
 	@NotNull
-	@Pattern(regexp = "^$|/[^/]*", message = "Path must be empty or start with /")
+	@Pattern(regexp = "^$|/.*", message = "Path must be empty or start with /")
 	private String path;
 
 	/**

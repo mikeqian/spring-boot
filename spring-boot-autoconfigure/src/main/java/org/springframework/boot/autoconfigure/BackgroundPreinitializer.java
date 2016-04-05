@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2015 the original author or authors.
+ * Copyright 2012-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,15 +16,16 @@
 
 package org.springframework.boot.autoconfigure;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
 import javax.validation.Validation;
 
 import org.apache.catalina.mbeans.MBeanFactory;
 
 import org.springframework.boot.context.event.ApplicationStartedEvent;
+import org.springframework.boot.logging.LoggingApplicationListener;
+import org.springframework.context.ApplicationEvent;
 import org.springframework.context.ApplicationListener;
+import org.springframework.context.event.ContextRefreshedEvent;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.converter.support.AllEncompassingFormHttpMessageConverter;
 
 /**
@@ -32,45 +33,68 @@ import org.springframework.http.converter.support.AllEncompassingFormHttpMessage
  * time consuming tasks.
  *
  * @author Phillip Webb
+ * @author Andy Wilkinson
  * @since 1.3.0
  */
-public class BackgroundPreinitializer
-		implements ApplicationListener<ApplicationStartedEvent> {
+@Order(LoggingApplicationListener.DEFAULT_ORDER + 1)
+public class BackgroundPreinitializer implements ApplicationListener<ApplicationEvent> {
+
+	private volatile Thread initializationThread;
 
 	@Override
-	public void onApplicationEvent(ApplicationStartedEvent event) {
-		ExecutorService executor = Executors.newSingleThreadExecutor();
-		submit(executor, new MessageConverterInitializer());
-		submit(executor, new MBeanFactoryInitializer());
-		submit(executor, new ValidationInitializer());
-		executor.shutdown();
-	}
-
-	private void submit(ExecutorService executor, Runnable runnable) {
-		executor.submit(new FailSafeRunnable(runnable));
-	}
-
-	/**
-	 * Wrapper to ignore any thrown exceptions.
-	 */
-	private static class FailSafeRunnable implements Runnable {
-
-		private final Runnable delegate;
-
-		FailSafeRunnable(Runnable delegate) {
-			this.delegate = delegate;
+	public void onApplicationEvent(ApplicationEvent event) {
+		if (event instanceof ApplicationStartedEvent) {
+			performInitialization();
 		}
+		else if (event instanceof ContextRefreshedEvent) {
+			awaitInitialization();
+		}
+	}
 
-		@Override
-		public void run() {
+	private void performInitialization() {
+		try {
+			Thread thread = new Thread(new Runnable() {
+
+				@Override
+				public void run() {
+					runSafely(new MessageConverterInitializer());
+					runSafely(new MBeanFactoryInitializer());
+					runSafely(new ValidationInitializer());
+				}
+
+				public void runSafely(Runnable runnable) {
+					try {
+						runnable.run();
+					}
+					catch (Throwable ex) {
+						// Ignore
+					}
+				}
+
+			}, "background-preinit");
+			thread.start();
+			this.initializationThread = thread;
+		}
+		catch (Exception ex) {
+			// This will fail on GAE where creating threads is prohibited. We can safely
+			// continue but startup will be slightly slower as the initialization will now
+			// happen on the main thread.
+		}
+	}
+
+	private void awaitInitialization() {
+		Thread thread = this.initializationThread;
+		if (thread != null) {
 			try {
-				this.delegate.run();
+				thread.join();
 			}
-			catch (Throwable ex) {
-				// Ignore
+			catch (InterruptedException ex) {
+				Thread.currentThread().interrupt();
+			}
+			finally {
+				this.initializationThread = null;
 			}
 		}
-
 	}
 
 	/**
